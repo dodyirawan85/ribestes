@@ -811,8 +811,13 @@ static int qpnp_lcdb_enable_wa(struct qpnp_lcdb *lcdb)
 	return 0;
 }
 
+#ifndef CONFIG_PRODUCT_REALME_TRINKET
 #define VOLTAGE_START_MV	4500
 #define VOLTAGE_STEP_MV		500
+#else
+#define VOLTAGE_START_MV	4700
+#define VOLTAGE_STEP_MV		400
+#endif
 
 static int qpnp_lcdb_enable(struct qpnp_lcdb *lcdb)
 {
