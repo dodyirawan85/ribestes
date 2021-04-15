@@ -17,6 +17,12 @@
 #include "dsi_hw.h"
 #include "dsi_phy_hw.h"
 
+#ifdef CONFIG_ODM_WT_EDIT
+//Hongzhu.Su@ODM_WT.MM.Display.Lcd., Start 2020/09/18, add ILI9881H INNOLUX INX GG3 LCD tag
+extern bool mipi_d_phy_ilitek_innolux_gg3_flag;
+//Hongzhu.Su@ODM_WT.MM.Display.Lcd., End 2020/03/09, add ILI9881H INNOLUX INX GG3 LCD tag
+#endif /* CONFIG_ODM_WT_EDIT */
+
 #define DSIPHY_CMN_REVISION_ID0                   0x0000
 #define DSIPHY_CMN_REVISION_ID1                   0x0004
 #define DSIPHY_CMN_REVISION_ID2                   0x0008
@@ -208,7 +214,14 @@ void dsi_phy_hw_v2_0_enable(struct dsi_phy_hw *phy,
 			DSI_W32(phy, DSIPHY_DLNX_CFG(i, j),
 				lanecfg->lane[i][j]);
 
+		#ifdef CONFIG_ODM_WT_EDIT
 		DSI_W32(phy, DSIPHY_DLNX_TEST_STR(i), 0x88);
+		#else
+		if(mipi_d_phy_ilitek_innolux_gg3_flag)
+			DSI_W32(phy, DSIPHY_DLNX_TEST_STR(i), 0x44);
+		else
+			DSI_W32(phy, DSIPHY_DLNX_TEST_STR(i), 0x88);
+		#endif
 
 		for (j = 0; j < timing->count_per_lane; j++)
 			DSI_W32(phy, DSIPHY_DLNX_TIMING_CTRL(i, j),
