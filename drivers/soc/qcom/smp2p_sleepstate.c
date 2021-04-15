@@ -21,7 +21,12 @@
 
 #define PROC_AWAKE_ID 12 /* 12th bit */
 #define AWAKE_BIT BIT(PROC_AWAKE_ID)
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Bo.Xiang@BSP.Sensor, 2019-08-21, add for ignore non_wakeup sensor notify event wihle ap is going to sleep
+struct qcom_smem_state *qstate;
+#else
 static struct qcom_smem_state *state;
+#endif //CONFIG_PRODUCT_REALME_TRINKET
 struct wakeup_source notify_ws;
 
 /**
@@ -38,11 +43,15 @@ static int sleepstate_pm_notifier(struct notifier_block *nb,
 {
 	switch (event) {
 	case PM_SUSPEND_PREPARE:
+		#ifndef CONFIG_PRODUCT_REALME_TRINKET
 		qcom_smem_state_update_bits(state, AWAKE_BIT, 0);
+		#endif
 		break;
 
 	case PM_POST_SUSPEND:
+		#ifndef CONFIG_PRODUCT_REALME_TRINKET
 		qcom_smem_state_update_bits(state, AWAKE_BIT, AWAKE_BIT);
+		#endif
 		break;
 	}
 
@@ -67,10 +76,17 @@ static int smp2p_sleepstate_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
 
+	#ifndef CONFIG_PRODUCT_REALME_TRINKET
 	state = qcom_smem_state_get(&pdev->dev, 0, &ret);
 	if (IS_ERR(state))
 		return PTR_ERR(state);
 	qcom_smem_state_update_bits(state, AWAKE_BIT, AWAKE_BIT);
+	#else
+	qstate = qcom_smem_state_get(&pdev->dev, 0, &ret);
+    if (IS_ERR(qstate))
+        return PTR_ERR(qstate);
+    qcom_smem_state_update_bits(qstate, AWAKE_BIT, AWAKE_BIT);
+	#endif
 
 	ret = register_pm_notifier(&sleepstate_pm_nb);
 	if (ret)
