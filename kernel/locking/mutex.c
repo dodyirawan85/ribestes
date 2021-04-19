@@ -830,7 +830,13 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		 * wait_lock. This ensures the lock cancellation is ordered
 		 * against mutex_unlock() and wake-ups do not go missing.
 		 */
-		if (unlikely(signal_pending_state(state, current))) {
+		if (unlikely(signal_pending_state(state, current))
+		#ifdef CONFIG_PRODUCT_REALME_TRINKET 
+		// fangpan@Swdp.shanghai,2015/11/12
+			|| hung_long_and_fatal_signal_pending(current)
+		#endif // CONFIG_PRODUCT_REALME_TRINKET
+		)
+		{
 			ret = -EINTR;
 			goto err;
 		}
@@ -842,7 +848,19 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		}
 
 		spin_unlock(&lock->wait_lock);
+#if defined(CONFIG_PRODUCT_REALME_TRINKET) && defined(CONFIG_OPPO_HEALTHINFO)
+// Liujie.Xie@TECH.Kernel.Sched, 2019/08/29, add for stuck monitor
+        if (state & TASK_UNINTERRUPTIBLE) {
+            current->in_mutex = 1;
+        }
+#endif
 		schedule_preempt_disabled();
+#if defined(CONFIG_PRODUCT_REALME_TRINKET) && defined(CONFIG_OPPO_HEALTHINFO)
+// Liujie.Xie@TECH.Kernel.Sched, 2019/08/29, add for stuck monitor
+        if (state & TASK_UNINTERRUPTIBLE) {
+            current->in_mutex = 0;
+        }
+#endif
 
 		/*
 		 * ww_mutex needs to always recheck its position since its waiter
