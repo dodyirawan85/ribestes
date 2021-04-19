@@ -61,6 +61,11 @@ enum msm_sensor_camera_id_t {
 	CAMERA_1,
 	CAMERA_2,
 	CAMERA_3,
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+	CAMERA_4,
+	CAMERA_5,
+	CAMERA_6,
+#endif
 	MAX_CAMERAS,
 };
 
@@ -259,6 +264,9 @@ enum msm_camera_i2c_operation {
 	MSM_CAM_WRITE = 0,
 	MSM_CAM_POLL,
 	MSM_CAM_READ,
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+	MSM_CAM_CONTINUOUS_READ,
+#endif
 };
 
 struct msm_sensor_i2c_sync_params {

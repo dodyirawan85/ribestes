@@ -15,6 +15,14 @@ extern int sysctl_hung_task_selective_monitoring;
 extern int proc_dohung_task_timeout_secs(struct ctl_table *table, int write,
 					 void __user *buffer,
 					 size_t *lenp, loff_t *ppos);
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+/* fanhui@PhoneSW.BSP, 2016/02/02, DeathHealer, record the hung task killing */
+extern char sysctl_hung_task_oppo_kill[];
+#ifdef CONFIG_DEATH_HEALER
+/* Wen.Luo@BSP.Kernel.Stability, 2019/01/12, DeathHealer , Foreground background optimization,change max io count */
+extern int sysctl_hung_task_maxiowait_count;
+#endif /* CONFIG_DEATH_HEALER */
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 #else
 /* Avoid need for ifdefs elsewhere in the code */
 enum { sysctl_hung_task_timeout_secs = 0 };

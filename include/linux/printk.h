@@ -13,6 +13,11 @@ extern const char linux_proc_banner[];
 
 #define PRINTK_MAX_SINGLE_HEADER_LEN 2
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Nanwei.Deng@BSP.CHG.Basic 2018/05/01,add for get disable uart value from cmdline
+extern bool oem_get_uartlog_status(void);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
+
 static inline int printk_get_level(const char *buffer)
 {
 	if (buffer[0] == KERN_SOH_ASCII && buffer[1]) {
