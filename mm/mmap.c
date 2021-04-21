@@ -45,6 +45,12 @@
 #include <linux/moduleparam.h>
 #include <linux/pkeys.h>
 #include <linux/oom.h>
+#if defined(CONFIG_PRODUCT_REALME_TRINKET) && defined(CONFIG_OPPO_HEALTHINFO)
+/* Kui.Zhang@TEC.Kernel.Performance, 2019/06/06
+ * collect svm_oom log
+ */
+#include <soc/oppo/oppo_healthinfo.h>
+#endif /*CONFIG_PRODUCT_REALME_TRINKET*/
 #include <linux/sched/mm.h>
 
 #include <linux/uaccess.h>
@@ -1005,6 +1011,19 @@ again:
 		}
 		else if (next)
 			vma_gap_update(next);
+#ifdef VNEDOR_EDIT
+		else {
+			/* Kui.Zhang@TEC.Kernel.Performance, 2019/03/13
+			 * reserve area top addr check
+			 */
+			if (BACKUP_ALLOC_FLAG(vma->vm_flags))
+				VM_WARN_ON(mm->reserve_highest_vm_end !=
+						vm_end_gap(vma));
+			else
+				VM_WARN_ON(mm->highest_vm_end !=
+						vm_end_gap(vma));
+		}
+#else
 		else {
 			/*
 			 * If remove_next == 2 we obviously can't
@@ -1027,6 +1046,7 @@ again:
 			 */
 			VM_WARN_ON(mm->highest_vm_end != vm_end_gap(vma));
 		}
+#endif // CONFIG_PRODUCT_REALME_TRINKET
 	}
 	if (insert && file)
 		uprobe_mmap(insert);

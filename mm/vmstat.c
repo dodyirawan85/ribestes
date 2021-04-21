@@ -1062,6 +1062,10 @@ const char * const vmstat_text[] = {
 	"numa_other",
 #endif
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+/*Huacai.Zhou@PSW.BSP.Kernel.MM, 2018-09-25, add ion cached account*/
+        "nr_ioncache_pages",
+#endif /*CONFIG_PRODUCT_REALME_TRINKET*/
 	/* Node-based counters */
 	"nr_inactive_anon",
 	"nr_active_anon",
