@@ -46,6 +46,15 @@
 #define XT_SOCKET_SUPPORTED_HOOKS \
 	((1 << NF_INET_PRE_ROUTING) | (1 << NF_INET_LOCAL_IN))
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+#define MAX_UID 10000
+static DEFINE_SPINLOCK(pid_stat_tree_lock);
+static struct proc_dir_entry *xt_qtaguid_stats_pid_file;
+static int qtagpid_reset_stats(void);
+static int qtagpid_set_split_uid_list(const char *input);
+static LIST_HEAD(split_uid_list);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 
 static const char *module_procdirname = "xt_qtaguid";
 static struct proc_dir_entry *xt_qtaguid_procdir;
@@ -412,6 +421,15 @@ static struct uid_tag_data *uid_tag_data_tree_search(struct rb_root *root,
 	}
 	return NULL;
 }
+
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Zhengding.Chen@BSP.Power.Basic 2019/04/03  add for backup of netstat before sleep
+struct proc_dir_entry * get_xt_qtaguid_procdir(void)
+{
+	return xt_qtaguid_procdir;
+}
+EXPORT_SYMBOL(get_xt_qtaguid_procdir);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 
 /*
  * Allocates a new uid_tag_data struct if needed.
@@ -869,6 +887,12 @@ static struct iface_stat *iface_alloc(struct net_device *net_dev)
 	}
 	spin_lock_init(&new_iface->tag_stat_list_lock);
 	new_iface->tag_stat_tree = RB_ROOT;
+
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+	INIT_LIST_HEAD(&new_iface->pid_stat_list);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
+
 	_iface_stat_set_active(new_iface, net_dev, true);
 
 	/*
@@ -1242,10 +1266,29 @@ static void iface_stat_update_from_skb(const struct sk_buff *skb,
 	spin_unlock_bh(&iface_stat_list_lock);
 }
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+#include "xt_qtaguid_pid_stat_update.c"
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
+
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for net comsuption statistics for
+//process which use the same uid.
+static void tag_stat_update(struct tag_stat *tag_entry,
+			enum ifs_tx_rx direction, int proto, int bytes,
+			char *task_comm, pid_t task_pid)
+#else /* CONFIG_PRODUCT_REALME_TRINKET */
 static void tag_stat_update(struct tag_stat *tag_entry,
 			enum ifs_tx_rx direction, int proto, int bytes)
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 {
 	int active_set;
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+	struct split_uid *u;
+	uid_t uid_from_tag;
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
+
 	active_set = get_active_counter_set(tag_entry->tn.tag);
 	MT_DEBUG("qtaguid: tag_stat_update(tag=0x%llx (uid=%u) set=%d "
 		 "dir=%d proto=%d bytes=%d)\n",
@@ -1256,6 +1299,25 @@ static void tag_stat_update(struct tag_stat *tag_entry,
 	if (tag_entry->parent_counters)
 		data_counters_update(tag_entry->parent_counters, active_set,
 				     direction, proto, bytes);
+
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+	uid_from_tag = get_uid_from_tag(tag_entry->tn.tag);
+
+	if (uid_from_tag <= MAX_UID) {
+		//Android OS:
+		pid_stat_update(tag_entry, active_set, direction, proto, bytes, task_comm, task_pid);
+	} else {
+		//App with share uid:
+		list_for_each_entry(u, &split_uid_list, list) {
+			if (uid_from_tag == u->uid) {
+				//printk("tag_stat_update found match uid:%d\n", uid_from_tag);
+				pid_stat_update(tag_entry, active_set, direction, proto, bytes, task_comm, task_pid);
+			}
+		}
+	}
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
+
 }
 
 /*
@@ -1276,14 +1338,29 @@ static struct tag_stat *create_if_tag_stat(struct iface_stat *iface_entry,
 		goto done;
 	}
 	new_tag_stat_entry->tn.tag = tag;
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+	new_tag_stat_entry->pid_stat_tree = RB_ROOT;
+	new_tag_stat_entry->iface_stat = iface_entry;
+	spin_lock_init(&new_tag_stat_entry->pid_stat_list_lock);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 	tag_stat_tree_insert(new_tag_stat_entry, &iface_entry->tag_stat_tree);
 done:
 	return new_tag_stat_entry;
 }
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for net comsuption statistics for
+//process which use the same uid.
+static void if_tag_stat_update(const char *ifname, uid_t uid,
+			       const struct sock *sk, enum ifs_tx_rx direction,
+			       int proto, int bytes,
+			       char *task_comm, pid_t task_pid)
+#else /* CONFIG_PRODUCT_REALME_TRINKET */
 static void if_tag_stat_update(const char *ifname, uid_t uid,
 			       const struct sock *sk, enum ifs_tx_rx direction,
 			       int proto, int bytes)
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 {
 	struct tag_stat *tag_stat_entry;
 	tag_t tag, acct_tag;
@@ -1336,7 +1413,13 @@ static void if_tag_stat_update(const char *ifname, uid_t uid,
 		 * Updating the {acct_tag, uid_tag} entry handles both stats:
 		 * {0, uid_tag} will also get updated.
 		 */
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for net comsuption statistics for
+//process which use the same uid.
+		tag_stat_update(tag_stat_entry, direction, proto, bytes, task_comm, task_pid);
+#else /* CONFIG_PRODUCT_REALME_TRINKET */
 		tag_stat_update(tag_stat_entry, direction, proto, bytes);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 		goto unlock;
 	}
 
@@ -1374,7 +1457,13 @@ static void if_tag_stat_update(const char *ifname, uid_t uid,
 		 */
 		BUG_ON(!new_tag_stat);
 	}
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for net comsuption statistics for
+//process which use the same uid.
+	tag_stat_update(new_tag_stat, direction, proto, bytes, task_comm, task_pid);
+#else /* CONFIG_PRODUCT_REALME_TRINKET */
 	tag_stat_update(new_tag_stat, direction, proto, bytes);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 unlock:
 	spin_unlock_bh(&iface_entry->tag_stat_list_lock);
 	spin_unlock_bh(&iface_stat_list_lock);
@@ -1612,9 +1701,18 @@ static struct sock *qtaguid_find_sk(const struct sk_buff *skb,
 	return sk;
 }
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for net comsuption statistics for
+//process which use the same uid.
+static void account_for_uid(const struct sk_buff *skb,
+            const struct sock *alternate_sk, uid_t uid,
+            struct xt_action_param *par,
+            char *task_comm, pid_t task_pid)
+#else /* CONFIG_PRODUCT_REALME_TRINKET */
 static void account_for_uid(const struct sk_buff *skb,
 			    const struct sock *alternate_sk, uid_t uid,
 			    struct xt_action_param *par)
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 {
 	const struct net_device *el_dev;
 	enum ifs_tx_rx direction;
@@ -1626,10 +1724,20 @@ static void account_for_uid(const struct sk_buff *skb,
 		 par->state->hook, el_dev->name, el_dev->type,
 		 par->state->pf, proto, direction);
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for net comsuption statistics for
+//process which use the same uid.
+	if_tag_stat_update(el_dev->name, uid,
+			   skb->sk ? skb->sk : alternate_sk,
+			   direction,
+			   proto, skb->len,
+			   task_comm, task_pid);
+#else
 	if_tag_stat_update(el_dev->name, uid,
 			   skb->sk ? skb->sk : alternate_sk,
 			   direction,
 			   proto, skb->len);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 }
 
 static bool qtaguid_mt(const struct sk_buff *skb, struct xt_action_param *par)
@@ -1725,8 +1833,15 @@ static bool qtaguid_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		 * couldn't find the owner, so for now we just count them
 		 * against the system.
 		 */
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for net comsuption statistics for
+//process which use the same uid.
+		if (do_tag_stat)
+			account_for_uid(skb, sk, 0, par, "LostSock", 0);
+#else
 		if (do_tag_stat)
 			account_for_uid(skb, sk, 0, par);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 		MT_DEBUG("qtaguid[%d]: leaving (sk=NULL)\n", parst->hook);
 		res = (info->match ^ info->invert) == 0;
 		atomic64_inc(&qtu_events.match_no_sk);
@@ -1737,8 +1852,15 @@ static bool qtaguid_mt(const struct sk_buff *skb, struct xt_action_param *par)
 	}
 	sock_uid = sk->sk_uid;
 	if (do_tag_stat)
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for net comsuption statistics for
+//process which use the same uid.
+		account_for_uid(skb, sk, from_kuid(&init_user_ns, sock_uid),
+				par, sk->sk_cmdline, 0);
+#else
 		account_for_uid(skb, sk, from_kuid(&init_user_ns, sock_uid),
 				par);
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 
 	/*
 	 * The following two tests fail the match when:
@@ -2480,6 +2602,17 @@ static ssize_t qtaguid_ctrl_parse(const char *input, size_t count)
 	case 'u':
 		res = ctrl_cmd_untag(input);
 		break;
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Runsheng.Pei@PSW.Android.OppoFeature.TrafficMonitor, 2014/09/16, Add for support network state
+//statistics by process information.
+	case 'r':
+		res = qtagpid_reset_stats();
+		break;
+
+	case 'n':
+		res = qtagpid_set_split_uid_list(input);
+		break;
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 
 	default:
 		res = -EINVAL;
@@ -2517,6 +2650,10 @@ struct proc_print_info {
 	tag_t tag; /* tag found by reading to tag_pos */
 	off_t tag_pos;
 	int tag_item_index;
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+	struct pid_stat *ps_entry;
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 };
 
 static void pp_stats_header(struct seq_file *m)
@@ -2942,6 +3079,11 @@ static const struct file_operations proc_qtaguid_stats_fops = {
 	.release	= seq_release_private,
 };
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+#include "xt_qtaguid_proc_qtaguid_stats_pid_fops.c"
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
+
 /*------------------------------------------*/
 static int __init qtaguid_proc_register(struct proc_dir_entry **res_procdir)
 {
@@ -2978,6 +3120,21 @@ static int __init qtaguid_proc_register(struct proc_dir_entry **res_procdir)
 	 * TODO: add support counter hacking
 	 * xt_qtaguid_stats_file->write_proc = qtaguid_stats_proc_write;
 	 */
+
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+	xt_qtaguid_stats_pid_file = proc_create_data("stats_pid", proc_stats_perms,
+			*res_procdir,
+			&proc_qtaguid_stats_pid_fops,
+			NULL);
+	if (!xt_qtaguid_stats_pid_file) {
+		pr_err("qtaguid: failed to create xt_qtaguid/stats_pid "
+				"file\n");
+		ret = -ENOMEM;
+		goto no_stats_entry;
+	}
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
+
 	return 0;
 
 no_stats_entry:

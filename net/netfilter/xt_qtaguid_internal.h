@@ -197,6 +197,29 @@ static inline uint64_t dc_sum_packets(struct data_counters *counters,
 		+ counters->bpc[set][direction][IFS_PROTO_OTHER].packets;
 }
 
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+#include <linux/sched.h>
+
+struct pid_node {
+	struct rb_node node;
+	char tag[TASK_COMM_LEN];
+};
+
+struct pid_stat {
+	struct pid_node tn;
+	struct data_counters counters;
+	pid_t pid;
+	tag_t uid;
+	int index;
+	struct list_head pslist;
+};
+
+struct split_uid {
+	uid_t uid;
+	struct list_head list;
+};
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 
 /* Generic X based nodes used as a base for rb_tree ops */
 struct tag_node {
@@ -212,6 +235,12 @@ struct tag_stat {
 	 * matching parent uid_tag.
 	 */
 	struct data_counters *parent_counters;
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+	struct rb_root pid_stat_tree;
+	spinlock_t pid_stat_list_lock;
+	struct iface_stat *iface_stat;
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 };
 
 struct iface_stat {
@@ -238,6 +267,10 @@ struct iface_stat {
 	struct proc_dir_entry *proc_ptr;
 
 	struct rb_root tag_stat_tree;
+#ifdef CONFIG_PRODUCT_REALME_TRINKET
+//Geliang.Tan@PSW.Android.OppoFeature.TrafficMonitor, 2014/06/20, Add for tag pid
+	struct list_head pid_stat_list;
+#endif /* CONFIG_PRODUCT_REALME_TRINKET */
 	spinlock_t tag_stat_list_lock;
 };
 
